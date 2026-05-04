@@ -1,0 +1,555 @@
+openapi: 3.1.0
+info:
+  version: 1.0.0-oas3.1
+  title: Transaction Service API
+  description: >-
+    API для управління транзакціями в персональній системі фінансового
+    планування. Підтримує створення, перегляд, оновлення, видалення,
+    фільтрацію та пагінацію транзакцій.
+servers:
+  # (п.5 Guideline) Версіонування через URL
+  - url: https://localhost:8080/api/v1
+    description: Dev server
+  - url: https://api.finplanai.com/api/v1
+    description: Production server
+
+security:
+  - bearerAuth: []
+
+paths:
+  # (п.3 Guideline) Ресурс у множині, іменник
+  /transactions:
+    get:
+      summary: Отримати список транзакцій
+      description: >-
+        Повертає список транзакцій з підтримкою пагінації, фільтрів та
+        сортування
+      tags:
+        - transactions
+      operationId: getAllTransactions
+      # (п.7 Guideline) Пагінація, фільтри, сортування через query parameters
+      parameters:
+        - name: page
+          in: query
+          description: Номер сторінки (починається з 0)
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          description: Кількість елементів на сторінці
+          schema:
+            type: integer
+            default: 20
+        - name: category
+          in: query
+          description: Фільтр за категорією
+          schema:
+            type: string
+        - name: sort
+          in: query
+          description: Сорутвання у форматі field,direction (наприклад date,desc або amount,asc)
+          schema:
+            type: string
+            example: date,desc
+      responses:
+        '200':
+          description: Список транзакцій успішно отримано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedTransactionResponse'
+        '401':
+          description: Неавторизовано (проблеми з JWT)
+        'default':
+          description: Всі нестандартні помилки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    
+    post:
+      summary: Додати нову транзакцію
+      description: Створює нову транзакцію та публікує подію TransactionCreated
+      tags:
+        - transactions
+      operationId: createTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionCreateRequest'
+      responses:
+        '201':
+          description: Транзакція успішно створена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Невалідні дані
+        '401':
+          description: Неавторизовано
+        'default':
+          description: Всі нестандартні помилки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  
+    delete:
+      summary: Видалити всі транзакції
+      description: Видаляє всі транзакції поточного користувача
+      tags:
+        - transactions
+      operationId: deleteAllTransactions
+      responses:
+        '204':
+          description: Всі транзакції успішно видалені
+        '401':
+          description: Неавторизовано
+        'default':
+          description: Всі нестандартні помилки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  
+  /transactions/{transaction_id}:
+    get:
+      summary: Отримати транзакцію за ідентифікатором
+      description: >-
+        Повертає список транзакцій з підтримкою пагінації, фільтрів та
+        сортування
+      tags:
+        - transactions
+      operationId: getTransactionById
+      parameters:
+        - name: transaction_id
+          in: path
+          required: true
+          description: Ідентифікатор транзакції (формат UUID)
+          schema:
+            type: string
+            format: uuid
+            example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        '200':
+          description: Транзакцію успішно отримано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '401':
+          description: Неавторизовано
+        '404':
+          description: Транзакцію не знайдено
+        'default':
+          description: Всі нестандартні помилки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    
+    put:
+      summary: Повне оновлення транзакції
+      description: Оновлює всі поля транзакції 
+      tags:
+        - transactions
+      operationId: updateTransactionFull
+      parameters:
+        - name: transaction_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionUpdateRequest'
+      responses:
+        '200':
+          description: Транзакцію успішно оновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Невалідні дані
+        '401':
+          description: Неавторизовано
+        '404':
+          description: Транзакцію не знайдено
+        'default':
+          description: Всі нестандартні помилки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    patch:
+      summary: Часткове оновлення транзакції
+      description: Оновлює лише передані поля
+      tags:
+        - transactions
+      operationId: updateTransactionPartial
+      parameters:
+        - name: transaction_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionPatchRequest"
+      responses:
+        '200':
+          description: Транзакцію успішно оновлено
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionResponse"
+        '400':
+          description: Невалідні дані
+        '401':
+          description: Неавторизовано
+        '404':
+          description: Транзакцію не знайдено
+        'default':
+          description: Всі нестандартні помилки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    
+    delete:
+      summary: Видалити транзакцію за ідентифікатором
+      description: >-
+        Видаляє транзакцію за ідентифікатором
+      tags:
+        - transactions
+      operationId: deleteTransactionById
+      parameters:
+        - name: transaction_id
+          in: path
+          required: true
+          description: Ідентифікатор транзакції
+          schema:
+            type: string
+            format: uuid
+            example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        '204':
+          description: Транзакцію успішно видалено
+        '401':
+          description: Неавторизовано
+        '404':
+          description: Транзакцію не знайдено
+        'default':
+          description: Всі нестандартні помилки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /transactions/bulk:
+    post:
+      summary: Масовий імпорт транзакцій
+      description: Імпортує список транзакцій (наприклад, з Bank API або CSV). Працює асинхронно.
+      tags:
+        - transactions
+      operationId: bulkImportTransactions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transactions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/TransactionCreateRequest'
+      responses:
+        '202':
+          description: Запит на імпорт прийнято, обробка триває асинхронно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                    description: Ідентифікатор завдання для відстеження статусу
+                  message:
+                    type: string
+                    example: "Імпорт розпочато. Отримаєте сповіщення після завершення."
+        '400':
+          description: Невалідні дані
+        '401':
+          description: Неавторизовано
+        'default':
+          description: Всі нестандартні помилки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /transactions/export:
+    get:
+      summary: Експорт транзакцій
+      description: Експортує транзакції у формат CSV або PDF
+      tags:
+        - transactions
+      operationId: exportTransactions
+      parameters:
+        - name: format
+          in: query
+          required: true
+          description: Формат експорту (csv або pdf)
+          schema:
+            type: string
+            enum: 
+              - csv
+              - pdf
+            example: csv
+        - name: period
+          in: query
+          description: Період (наприклад, 2026-05 або 2026-01-01,2026-05-01)
+          schema:
+            type: string
+            example: "2026-05"
+        - name: category
+          in: query
+          description: Фільтр за категорією
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Файл з транзакціями
+          content:
+            text/csv:
+              schema:
+                type: string
+                example: "id,amount,type,category,date\n123,250.50,EXPENSE,Їжа,2026-05-03"
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '202':
+          description: Якщо експорт великий, повертається jobId (асинхронно)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                  message:
+                    type: string
+                    example: "Експорт триває. Результат буде надіслано на email."
+        '400':
+          description: Невалідний формат або період
+        '401':
+          description: Неавторизовано
+        'default':
+          description: Всі нестандартні помилки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  
+  schemas:
+    TransactionCreateRequest:
+      type: object
+      required:
+        - amount
+        - type
+        - categoryId
+        - transactionDate
+      properties:
+        amount:
+          type: number
+          format: decimal
+          example: 1249.5
+        type:
+          type: string
+          enum:
+            - INCOME
+            - EXPENSE
+          example: EXPENSE
+        categoryId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        description:
+          type: string
+          example: Купівля ноутбука
+        transactionDate:
+          type: string
+          format: date
+          example: '2026-05-03'
+    
+    TransactionUpdateRequest:
+      type: object
+      required:
+        - amount
+        - type
+        - categoryId
+        - transactionDate
+      properties:
+        amount:
+          type: number
+          format: decimal
+          example: 1500.0
+        type:
+          type: string
+          enum:
+            - INCOME
+            - EXPENSE
+          example: EXPENSE
+        categoryId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        description:
+          type: string
+        transactionDate:
+          type: string
+          format: date
+          example: '2026-05-03'
+          
+    TransactionPatchRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: decimal
+          example: 1500.0
+        type:
+          type: string
+          enum:
+            - INCOME
+            - EXPENSE
+        categoryId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        description:
+          type: string
+        transactionDate:
+          type: string
+          format: date
+          example: '2026-05-03'
+          
+    TransactionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        amount:
+          type: number
+          format: decimal
+          example: 1249.5
+        type:
+          type: string
+          enum:
+            - INCOME
+            - EXPENSE
+          example: EXPENSE
+        categoryId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        categoryName:
+          type: string
+          example: Техніка
+        description:
+          type: string
+          example: Купівля ноутбука
+        transactionDate:
+          type: string
+          format: date
+          example: '2026-05-03'
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-05-03T20:45:12Z'
+    
+    PagedTransactionResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionResponse'
+        totalElements:
+          type: integer
+          description: Загальна кількість елементів
+          example: 87
+        totalPages:
+          type: integer
+          description: Загальна кількість сторінок
+          example: 5
+        size:
+          type: integer
+          description: Кількість елементів на сторінці
+          example: 20
+        page:
+          type: integer
+          description: Номер поточної сторінки
+          example: 1
+    
+    Error:
+      type: object
+      required:
+        - timestamp
+        - status
+        - error
+        - message
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: Час помилки
+        status:
+          type: integer
+          description: HTTP статус код
+          example: 400
+        error:
+          type: string
+          description: Назва помилки
+          example: Bad Request
+        message:
+          type: string
+          description: Детальний опис помилки
+          example: Сума транзакції не може бути від'ємною
+        errors:
+          type: array
+          description: Деталі помилок по полях (для валідації)
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
